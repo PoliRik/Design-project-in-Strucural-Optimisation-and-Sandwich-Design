@@ -1,0 +1,85 @@
+%% TASK 1.A
+clc 
+clear
+syms x1 x2
+f(x1,x2)=(x1-1)^4+2*x1*x2+8*x2^2;
+fcontour(f,[-2 4 -2.5 3])
+hold on
+xlabel('x1');
+ylabel('x2');
+title('(x1-1)^4+2*x1*x2+8*x2^2')
+x(:,1)=[2,1.5]';
+plot(x(1,1),x(2,1),'*r');
+nabla(x1,x2)=gradient(f,[x1,x2]);
+hessi(x1,x2)=hessian(f,[x1,x2]);
+flag=0;
+i=2;
+while flag==0
+    delta=-inv(hessi(x(1,i-1),x(2,i-1)))*nabla(x(1,i-1),x(2,i-1));
+    x(:,i)=x(:,i-1)+delta;
+    plot(x(1,i),x(2,i),'*r');
+    if abs(x(:,i)-x(:,i-1))<0.0001
+    flag=1;
+    end
+    i=i+1;
+end
+x
+%% TASK 1.B
+clc 
+clear
+syms a1 a2 b2 b3 b4 x 
+
+L=500; %[mm]
+q=0.1; %[N/mm]
+tf=0.34; %[mm]
+tc=25; %[mm]
+Ef=27*10^3; %[MPa]=[N/mm^2]
+Ec=105; %[MPa]=[N/mm^2]
+Gc=29; %[MPa]=[N/mm^2]
+d=tf+tc; %[mm]
+D=(Ef*tf*d^2)/2; %[N*mm]
+S=Gc*tc; %[N/mm]
+
+% PI=1/2(int_0-L D(d2wb/dx2)^2+S(dws/dx)^2)dx
+
+w_s=a1*x+a2*x^2;
+w_b=b2*x^2+b3*x^3+b4*x^4;
+w=w_s+w_b;
+d_w_s= diff(w_s,x);
+d2_w_b=diff(diff(w_b,x),x);
+
+PI(a1,a2,b2,b3,b4)=0.5*int((D*(d2_w_b)^2+S*(d_w_s)^2),[0 L])-int(q*w,[0,L]); % U1+U2
+
+nabla(a1,a2,b2,b3,b4)=gradient(PI,[a1,a2,b2,b3,b4]);
+hessi(a1,a2,b2,b3,b4)=hessian(PI,[a1,a2,b2,b3,b4]);
+c(:,1)=[1,1,1,1,1]';
+
+flag=0;
+i=2;
+while flag==0
+    delta=-inv(hessi(c(1,i-1),c(2,i-1),c(3,i-1),c(4,i-1),c(5,i-1)))*nabla(c(1,i-1),c(2,i-1),c(3,i-1),c(4,i-1),c(5,i-1));
+    c(:,i)=c(:,i-1)+delta;
+    %plot(x(1,i),x(2,i),'*r');
+    if abs(c(:,i)-c(:,i-1))<0.0001
+    flag=1;
+    end
+    i=i+1;
+end
+format long
+c
+
+ws=c(1,end)*x+c(2,end)*x^2;
+wb=c(3,end)*x^2+c(4,end)*x^3+c(5,end)*x^4;
+figure
+fplot(ws,[0,L],'r')
+legend('ws')
+
+figure
+fplot(wb,[0,L])
+legend('wb')
+
+% let's try MATLAB built in function
+pi = matlabFunction(PI,'vars',{[a1,a2,b2,b3,b4]});
+options = optimset('MaxFunEvals',10000)
+x0=[0,0,0,0,0];
+[C_m,fval,exitflag,output] = fminsearch(pi,x0,options)
