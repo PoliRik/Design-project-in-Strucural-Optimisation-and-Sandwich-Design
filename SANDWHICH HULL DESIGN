@@ -1,0 +1,273 @@
+%% TASK 4.1 - Stiffness constrains
+clc 
+clear
+
+%Extract material moduli 
+load expdata.mat
+b= 0.0333; %[m]
+m= 0.3065; %[kg]
+global rhos L w1e w2e tc tf d
+L=1.193; %[m]
+rhos=m/(L*b); %[kg/m^2]
+tf = 0.0015; %[m]
+tc = 0.0245;%[m]
+d=tf+tc; %[m]
+[pks,locs]=findpeaks(expdata(:,2),'MinPeakDistance',1000);
+w1e=(expdata(locs(1),1))*(2*pi); %[rad/s]
+w2e=(expdata(locs(2),1))*(2*pi); %[rad/s]
+
+% options = optimset('Display','iter');
+fun = @objectivefcn;
+Ef0=5*10^9;%[N/m^2]
+Gc0=3*10^6;%[N/m^2]
+x0=[Ef0,Gc0]; 
+
+[x,fval] = fminsearch(fun,x0)
+X_Mpa=double(vpa(x*10^-6));
+
+
+%Material properties
+
+rho_f=1760; %Kg/m^3
+rho_c=(rhos-rho_f*2*tf)/tc; %Kg/m^3
+Ef=double(X_Mpa(1)); %MPa
+Gc=double(X_Mpa(2)); %MPa
+Sigma_ult=Ef/64; %MPa
+Tau_ult=((rho_c^2)/60788)+(rho_c/70.6)-0.1912; %MPa
+Ec=4*Gc-31; %MPa
+sigfcr = 0.5*(Ef*Ec*Gc)^(1/3);
+nu=0.3;
+
+rho_f=rho_f*10^-9; %kg/mm3
+rho_c=rho_c*10^-9; %kg/mm3
+
+clear a b tc tf d x0
+
+%Panel properties -> partially fixed edges
+a= 1.75; %m
+b= 2.25; %m
+
+%Load
+
+P=80*(a*b)^(-0.3); %kN/m^2
+
+% Set some optimisations options to show intermediate results
+% 
+options = optimset;
+options.Diagnostics = 'on';
+options.Display = 'iter';
+options.MaxFunEvals = 300;
+options.TolFun = 1e-10;
+options.TolCon = 1e-10;
+options.TolX = 1e-10;
+options.Algorithm = 'sqp';
+
+%minimum reinforcement DNV ->hull outside or inside ?? (outside for now)
+M_min=(2400*(1+0.0025*(23-20)))*10^-9; %kg/mm^2
+tf_min=M_min/(2*rho_f);
+xmin=[tf_min,0]; 
+x0=[1,40];
+w_allow=b*0.02*10^3;
+
+% Perform optimisation
+
+[x,fval,exitflag, output, lambda] = fmincon('objF', x0, [], [], [], [], ...
+  xmin , [], 'nlcon_stiff',options,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow);
+
+% Write some results to screen
+
+disp('Design varaibles at optimum :'); x
+disp('Objective function at optimum :'); objF(x,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow)
+disp('Objective function at initial guess :'); objF(x0,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow)
+disp('Constraint values at optimum :')
+[g, z] = nlcon_stiff(x,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow)
+
+
+% Plotstuff
+
+TF = (0.1:0.025:10);
+TC = (1:0.25:50);
+[TF, TC] = meshgrid(TF, TC);
+
+% Plot objective function (red)
+
+M = rho_f*2*TF + rho_c*TC;
+figure(1)
+contour(TF, TC, M, 'r')
+hold on
+
+% Plot constraint = 0 (blue)
+
+D = TF + TC;
+D2 = (Ef.*TF.*D.^2)./(2*(1-nu^2)); 
+rho = (pi^2.*D2)./(10^6*Gc.*D.*b^2);
+C6 =  4.2 + 12.5*(1 - b/a) - 0.4*(1 - b/a)^2 + 0*(1 - b/a)^3 -2.7*(1 - b/a)^4 -0.4*(1 - b/a)^5;
+C7 = 7.5 + 11*(1 - b/a) - 3*(1 - b/a)^2 + -5.5*(1 - b/a)^3 + 0*(1 - b/a)^4 + 2.5*(1 - b/a)^5;
+C8 = 0.4 + 0.016*(b/a) + 0.12*(b/a)^2 + 0.78*(b/a)^3 -0.72*(b/a)^4 + 0.026*(b/a)^5;
+
+W = (10^6*P*b^4./D2).*(C6*C8+rho.*C7);
+W_plot=W-w_allow;
+contour(TF, TC, W_plot,[0,0], 'b')
+
+% Plot initial (blue o) and final (red x) points
+
+plot(x0(1), x0(2), 'bo', 'MarkerSize', 12)
+plot( x(1),  x(2), 'rx', 'MarkerSize', 12)
+
+xt = get(gca,'XTick');
+set(gca,'XTickLabel', xt)
+yt = get(gca,'YTick');
+set(gca,'YTickLabel', yt)
+xlabel('t_f [mm]')
+ylabel('t_c [mm]')
+
+
+%% TASK 4.1 - Stiffness and streght constrains
+%Safety factors 
+FOS_norm=3.33;
+FOS_shear=2.5;
+
+% Set some optimisations options to show intermediate results
+
+options = optimset;
+options.Diagnostics = 'on';
+options.Display = 'iter';
+options.MaxFunEvals = 300;
+options.TolFun = 1e-10;
+options.TolCon = 1e-10;
+options.TolX = 1e-10;
+options.Algorithm = 'sqp';
+
+xmin=[tf_min,0]; 
+x0=[5,20];
+w_allow=b*0.02*10^3;
+
+% Perform optimisation
+
+[x,fval,exitflag, output, lambda] = fmincon('objFSS', x0, [], [], [], [], ...
+  xmin , [], 'nlcon_SS',options,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow,Sigma_ult,Tau_ult,sigfcr,FOS_norm,FOS_shear);
+
+% Write some results to screen
+
+disp('Design varaibles at optimum :'); x
+disp('Objective function at optimum :'); objFSS(x,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow,Sigma_ult,Tau_ult,sigfcr,FOS_norm,FOS_shear)
+disp('Objective function at initial guess :'); objFSS(x0,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow,Sigma_ult,Tau_ult,sigfcr,FOS_norm,FOS_shear)
+disp('Constraint values at optimum :')
+[g, z] = nlcon_SS(x,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow,Sigma_ult,Tau_ult,sigfcr,FOS_norm,FOS_shear)
+
+
+% Plotstuff
+figure(2)
+TF = (0.1:0.025:15);
+TC = (1:0.25:100);
+[TF, TC] = meshgrid(TF, TC);
+
+% Plot objective function (red)
+
+M = rho_f*2*TF + rho_c*TC;
+
+contour(TF, TC, M, 'r')
+hold on
+
+% Plot constraint = 0 (blue)
+%wmax
+D = TF + TC;
+D2 = (Ef.*TF.*D.^2)./(2*(1-nu^2)); 
+rho = (pi^2.*D2)./(10^6*Gc.*D.*b^2);
+C6 =  4.2 + 12.5*(1 - b/a) - 0.4*(1 - b/a)^2 + 0*(1 - b/a)^3 -2.7*(1 - b/a)^4 -0.4*(1 - b/a)^5;
+C7 = 7.5 + 11*(1 - b/a) - 3*(1 - b/a)^2 + -5.5*(1 - b/a)^3 + 0*(1 - b/a)^4 + 2.5*(1 - b/a)^5;
+C8 = 0.4 + 0.016*(b/a) + 0.12*(b/a)^2 + 0.78*(b/a)^3 -0.72*(b/a)^4 + 0.026*(b/a)^5;
+
+W1 = (10^6*P*b^4./D2).*(C6*C8+rho.*C7);
+W_plot1=W1-w_allow;
+contour(TF, TC, W_plot1,[0,0], 'b')
+
+%sigma_max
+
+W=D.*TF;
+C2=-0.1*b/a+0.71*(b/a)^2+0.16*(b/a)^3-0.86*(b/a)^4+0.32*(b/a)^5;
+C3=0.23+0.6*(1-(b/a))+0.2*(1-(b/a))^2+0.4*(1-(b/a))^3-0.49*(1-(b/a))^4-0.18*(1-(b/a))^5;
+CN=C3+nu*C2;
+C1S=0.57-0.1*(b/a)+0.8*(b/a)^2+0.3*(b/a)^3-0.8*(b/a)^4+0.19*(b/a)^5;
+CNL = C2 + nu*C3;
+C1L = 0.96 + 0.17*(1 - b/a) + 0.4*(1 - b/a)^2 + 0.2*(1 - b/a)^3 -0.1*(1 - b/a)^4 -0.18*(1 - b/a)^5;
+sigma_f_S=((160*P*b^2)./W)*CN*C1S;
+sigma_f_L=((160*P*b^2)./W)*CNL*C1L;
+sigma_f_max=max(sigma_f_L,sigma_f_S);
+W_plot2=sigma_f_max-(Sigma_ult/FOS_norm);
+contour(TF, TC, W_plot2,[0,0], 'g')
+
+%Tau_max
+
+C4=0.65+0.5*(1-b/a)-0.02*(1-b/a)^2-0.13*(1-b/a)^3-0.07*(1-b/a)^4+0.035*(1-b/a)^5;
+C5 = 0.65 + 0.17*(1 - b/a) -0.07*(1 - b/a)^2 -0.03*(1 - b/a)^3 +0.01*(1 - b/a)^4 + 0*(1 - b/a)^5;
+tau_c_L=((0.52*P*b)./D)*C4;
+tau_c_S=((0.52*P*b)./D)*C5;
+tau_c_max=max(tau_c_L,tau_c_S);
+W_plot3=tau_c_max-(Tau_ult/FOS_shear);
+contour(TF, TC, W_plot3,[0,0], 'm')
+
+%sigfcr
+W_plot3=sigma_f_max-(sigfcr/FOS_norm);
+contour(TF, TC, W_plot3,[0,0], '-.k')
+
+
+
+% Plot initial (blue o) and final (red x) points
+
+plot(x0(1), x0(2), 'ko', 'MarkerSize', 12)
+plot( x(1),  x(2), 'rx', 'MarkerSize', 12)
+
+xt = get(gca,'XTick');
+set(gca,'XTickLabel', xt)
+yt = get(gca,'YTick');
+set(gca,'YTickLabel', yt)
+xlabel('t_f [mm]')
+ylabel('t_c [mm]')
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                        %FUNCTIONS%                                                 %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+function m = objF(x,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow)  
+
+  tf = x(1);  
+  tc = x(2);  
+  m =rho_f*2*tf + rho_c*tc;
+
+
+
+function [g, z] = nlcon_stiff(x,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow)
+  
+  props=[P,a,b,Ef,Gc,nu];
+  k=plate(x,props);
+  w_max=k(1); 
+  g=w_max-w_allow;
+  z = 0;
+  
+  
+
+function m = objFSS(x,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow,Sigma_ult,Tau_ult,sigfcr,FOS_norm,FOS_shear)  
+
+  tf = x(1);  
+  tc = x(2);  
+  m =rho_f*2*tf + rho_c*tc;
+  
+  
+  
+function [g, z] = nlcon_SS(x,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow,Sigma_ult,Tau_ult,sigfcr,FOS_norm,FOS_shear)
+  
+  props=[P,a,b,Ef,Gc,nu];
+  k=plate(x,props);
+   
+  g(1)=k(1)-w_allow;
+  g(2)=k(2)-(Sigma_ult/FOS_norm);
+  g(3)=k(3)-(Tau_ult/FOS_shear);
+  g(4)=k(2)-(sigfcr/FOS_norm);
+ 
+  z = 0;
+  
+  
+  
