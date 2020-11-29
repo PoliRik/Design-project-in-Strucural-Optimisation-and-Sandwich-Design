@@ -1,0 +1,76 @@
+%% TASK 2
+clc 
+clear
+digits(5)
+figure
+
+%exp results
+load expdata.mat
+[pks,locs]=findpeaks(expdata(:,2),'MinPeakDistance',1000);
+plot(expdata(:,1),expdata(:,2),expdata(locs,1),pks,'*r')
+xlim([0,1000]);
+xlabel('Frequency Hz');
+ylabel('Intensity');
+
+%Local variables
+b = 0.0333; %[m]
+m = 0.3065; %[kg]
+
+%Global variables
+global rhos L w1e w2e tc tf d
+L=1.193; %[m]
+rhos=m/(L*b); %[kg/m^2]
+tf = 0.0015; %[m]
+tc = 0.0245;%[m]
+d=tf+tc; %[m]
+
+%HZ to rad/s -> *2π
+w1e=(expdata(locs(1),1))*(2*pi); %[rad/s]
+w2e=(expdata(locs(2),1))*(2*pi); %[rad/s]
+
+options = optimset('Display','iter','PlotFcns',@optimplotfval);
+
+fun = @objectivefcn;
+
+% inital guess
+Ef0=5*10^9;%[N/m^2]
+Gc0=3*10^6;%[N/m^2]
+
+x0=[Ef0,Gc0]; 
+
+[x,fval,exitflag,output] = fminsearch(fun,x0,options)
+
+X_Mpa=vpa(x*10^-6);
+Ef=X_Mpa(1)*10^-3; %GPa
+Gc=X_Mpa(2); %MPa
+sprintf('The Young modulus of the fiber is %d GPa and the shear modulus of the core is %d MPa',Ef,Gc)
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function f_obj = objectivefcn(x)
+global rhos L w1e w2e tf tc d
+Ef=x(1);
+Gc=x(2);
+
+D=(Ef*tf*d^2)/2; %[N*m]
+S=Gc*tc; %[N/m]
+
+a=@(w)((rhos*w^2)/(2*S));
+b=@(w) sqrt(((rhos*w^2)/(2*S))^2+((rhos*w^2)/D));
+alpha=@(w)sqrt(-a(w)+b(w));
+beta=@(w)sqrt(a(w)+b(w));
+
+f=@(w)2*alpha(w)*beta(w)*(cosh(alpha(w)*L)*cos(beta(w)*L)-1)+(beta(w)^2-alpha(w)^2)*(sinh(alpha(w)*L)*sin(beta(w)*L));
+
+we1=(22.4*sqrt(D/(rhos*(L^4))))/2; 
+
+f_z1 =fzero(f,we1);
+guess2=2*f_z1;
+f_z2 =fzero(f,guess2);
+
+f_obj=((f_z1-w1e)^2)+((f_z2-w2e)^2);
+end
+
+
