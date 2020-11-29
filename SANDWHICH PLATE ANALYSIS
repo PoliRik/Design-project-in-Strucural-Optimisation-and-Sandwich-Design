@@ -1,0 +1,62 @@
+%% TASK 3
+clc
+clear
+
+%Insert propery in this order : P,a,b,Ef,Gc,nu & x=tf,tc
+props=[220,1.8,1.2,70*10^3,80,0.3];
+x=[4,50];
+
+platefun = @plate;
+%[w_max,sigma_f_max,tau_c_max]
+results=platefun(x,props);
+sprintf('w_max= %d mm',results(1))
+sprintf('sigma_max= %d MPa',results(2))
+sprintf('tau_max= %d MPa',results(3))
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function g = plate(x, props)
+%load variables
+tf=x(1);
+tc=x(2);
+P=props(1);
+a=props(2);
+b=props(3);
+Ef=props(4);
+Gc=props(5);
+nu=props(6);
+
+ba=b/a;
+d=tc+tf;
+
+%Max sigma
+W=d*tf;
+C2=-0.1*ba+0.71*ba^2+0.16*ba^3-0.86*ba^4+0.32*ba^5;
+C3=0.23+0.6*(1-ba)+0.2*(1-ba)^2+0.4*(1-ba)^3-0.49*(1-ba)^4-0.18*(1-ba)^5;
+CN=C3+nu*C2;
+CNL = C2 + nu*C3;
+C1S=0.57-0.1*ba+0.8*ba^2+0.3*ba^3-0.8*ba^4+0.19*ba^5;
+C1L = 0.96 + 0.17*(1 - b/a) + 0.4*(1 - b/a)^2 + 0.2*(1 - b/a)^3 -0.1*(1 - b/a)^4 -0.18*(1 - b/a)^5;
+sigma_f_S=((160*P*b^2)/W)*CN*C1S;
+sigma_f_L=((160*P*b^2)/W)*CNL*C1L;
+sigma_f_max=max(sigma_f_L,sigma_f_S);
+
+%Max tau
+C4=0.65+0.5*(1-ba)-0.02*(1-ba)^2-0.13*(1-ba)^3-0.07*(1-ba)^4+0.035*(1-ba)^5;
+C5 = 0.65 + 0.17*(1 - b/a) -0.07*(1 - b/a)^2 -0.03*(1 - b/a)^3 +0.01*(1 - b/a)^4 + 0*(1 - b/a)^5;
+tau_c_L=((0.52*P*b)/d)*C4;
+tau_c_S=((0.52*P*b)/d)*C5;
+tau_c_max=max(tau_c_L,tau_c_S);
+
+%wmax
+
+D2=(Ef*tf*d^2)/(2*(1-nu^2));
+rho=(pi^2*D2)/(10^6*Gc*d*b^2);
+C6=4.2+12.5*(1-ba)-0.4*(1-ba)^2-2.7*(1-ba)^4-0.4*(1-ba)^5;
+C7=7.5+11*(1-ba)-3*(1-ba)^2-5.5*(1-ba)^3+2.5*(1-ba)^5;
+C8=0.4+0.016*ba+0.12*ba^2+0.78*ba^3-0.72*ba^4+0.026*ba^5;
+w_max=((10^6*P*b^4)/D2)*(C6*C8+rho*C7);
+
+g=[w_max,sigma_f_max,tau_c_max];
+
+end
