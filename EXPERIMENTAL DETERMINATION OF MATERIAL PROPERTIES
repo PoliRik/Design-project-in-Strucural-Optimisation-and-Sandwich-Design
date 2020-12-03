@@ -9,8 +9,8 @@ load expdata.mat
 [pks,locs]=findpeaks(expdata(:,2),'MinPeakDistance',1000);
 plot(expdata(:,1),expdata(:,2),expdata(locs,1),pks,'*r')
 xlim([0,1000]);
-xlabel('Frequency Hz');
-ylabel('Intensity');
+xlabel('Frequency [Hz]');
+ylabel('Amplitude FRF');
 
 %Local variables
 b = 0.0333; %[m]
@@ -27,7 +27,7 @@ d=tf+tc; %[m]
 %HZ to rad/s -> *2π
 w1e=(expdata(locs(1),1))*(2*pi); %[rad/s]
 w2e=(expdata(locs(2),1))*(2*pi); %[rad/s]
-
+grid on
 options = optimset('Display','iter','PlotFcns',@optimplotfval);
 
 fun = @objectivefcn;
