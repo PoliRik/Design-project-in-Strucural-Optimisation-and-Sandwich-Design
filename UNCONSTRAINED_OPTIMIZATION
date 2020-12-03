@@ -7,8 +7,8 @@ fcontour(f,[-2 4 -2.5 3])
 hold on
 xlabel('x1');
 ylabel('x2');
-title('(x1-1)^4+2*x1*x2+8*x2^2')
-x(:,1)=[2,1.5]';
+% title('(x1-1)^4+2*x1*x2+8*x2^2')
+x(:,1)=[2.0,1.5]';
 plot(x(1,1),x(2,1),'*r');
 nabla(x1,x2)=gradient(f,[x1,x2]);
 hessi(x1,x2)=hessian(f,[x1,x2]);
@@ -52,7 +52,7 @@ PI(a1,a2,b2,b3,b4)=0.5*int((D*(d2_w_b)^2+S*(d_w_s)^2),[0 L])-int(q*w,[0,L]); % U
 
 nabla(a1,a2,b2,b3,b4)=gradient(PI,[a1,a2,b2,b3,b4]);
 hessi(a1,a2,b2,b3,b4)=hessian(PI,[a1,a2,b2,b3,b4]);
-c(:,1)=[1,1,1,1,1]';
+c(:,1)=[0,0,0,0,0]';
 
 flag=0;
 i=2;
@@ -78,8 +78,9 @@ figure
 fplot(wb,[0,L])
 legend('wb')
 
-% let's try MATLAB built in function
+%% let's try MATLAB built in function
+
 pi = matlabFunction(PI,'vars',{[a1,a2,b2,b3,b4]});
-options = optimset('MaxFunEvals',10000)
+options = optimset('Display','iter','TolFun',0.0001)
 x0=[0,0,0,0,0];
 [C_m,fval,exitflag,output] = fminsearch(pi,x0,options)
