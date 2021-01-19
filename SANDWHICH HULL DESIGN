@@ -640,5 +640,231 @@ function [g, z] = nlcon_SS(x,Ef, Gc, a, b, P,nu,rho_f ,rho_c,w_allow,Sigma_ult,T
  
   z = 0;
   
+function m = objFBS(x,Ef, Gc, a, b,nu,rho_f ,rho_c,w_allow_plate,w_allow_beam)  
+
+  tf = x(1);  %[mm]
+  tc = x(2);  %[mm]
+  Af = x(3);  %[mm]
+  h  = x(4);  %[mm]
+  tw = x(5);  %[mm]
+
+  m_plate=(((rho_f*(2*tf) + rho_c*tc))*((a*1000)*(b*1000)));%[kg]
+  m_beam=((tw*h+Af)*(a*1000))*rho_f;%[kg]
+
+  m =m_plate+m_beam; %[kg]
+  
+function [g, z] = nlcon_B_stiff(x,Ef, Gc, a, b,nu,rho_f ,rho_c,w_allow_plate,w_allow_beam)
+  
+  tf = x(1);  
+  tc = x(2);  
+  Af = x(3);
+  h  = x(4);
+  tw = x(5);
+  
+  y=[tf,tc];
+  
+  a=a*1000;
+  b=b*1000;
+  
+  b_eff =b*(1/(1+10*((b)/(0.58*a))^2)); %[mm] ORIGINAL B
+  AP=(a/1000)*((b/2)/1000); %[m^2] 
+  
+  Press_beam=80*(AP)^(-0.3); %[kPa]
+  P_beam=(Press_beam/1000)*(b_eff); %[N/mm]
+  
+  D_beam=(Ef*Af*b_eff*tf*h^2)/(Af+b_eff*tf); %[Nmm^2]
+  G_beam=Ef/(1+2*nu); %[MPa]
+  S_beam=G_beam*tw*h; %[N]
+  
+  A=a/2;
+  w_beam_max=((P_beam*(a^4))/(24*D_beam))*((A/a)^4-2*(A/a)^3+(A/a)^2)+(P_beam/(2*S_beam))*(a*A-(A)^2); 
+  
+  P_plate=80*((a/1000)*(b/2000))^(-0.3); %[kPa]
+  props=[P_plate,a/1000,b/2000,Ef,Gc,nu];
+  k=plate(y,props);  
+  w_plate_max=k(1);
+  
+  g(1)=w_plate_max-w_allow_plate;
+  g(2)=w_beam_max-w_allow_beam;
+  
+  z = 0;
+  
+function m = objFBSSV2_plate(x,Ef, Gc, a, b,nu,rho_f ,rho_c,w_allow_plate,Sigma_ult,Tau_ult,sigfcr,FOS_norm,FOS_shear)  
+
+  tf = x(1);  %[mm]
+  tc = x(2);  %[mm]
+
+  m_plate=(((rho_f*(2*tf) + rho_c*tc))*((a*1000)*(b*1000)));%[kg]
+
+  m =m_plate; %[kg]    
+  
+function m = objFBSSV2_beam(x,Ef,tf_opt,tc_opt, a, b,nu,rho_f ,rho_c,w_allow_beam,Sigma_ult,FOS_norm,FOS_shear)  
+
+  Af = x(1);  %[mm]
+  h  = x(2);  %[mm]
+  tw = x(3);  %[mm]
+
+  m_plate=(((rho_f*(2*tf_opt) + rho_c*tc_opt))*((a*1000)*(b*1000)));%[kg]
+  m_beam=((tw*h+Af)*(a*1000))*rho_f;%[kg]
+
+  m =m_plate+m_beam; %[kg] 
+  
+function [g, z] = nlcon_B_SS_V2_plate(x,Ef, Gc, a, b,nu,rho_f ,rho_c,w_allow_plate,Sigma_ult,Tau_ult,sigfcr,FOS_norm,FOS_shear)
+  
+  a=a*1000; %m to mm
+  b=b*1000; %m to mm
+  
+  %Plate
+  P_plate=80*((a/1000)*(b/2000))^(-0.3); %[kPa]
+  props=[P_plate,a/1000,b/2000,Ef,Gc,nu];
+  k=plate(x,props);  
+  w_plate_max=k(1);
+  sigma_plate=k(2);
+  tau_plate=k(3);
+  
+  %constrains
+  g(1)=w_plate_max-w_allow_plate;
+  g(2)=sigma_plate-(Sigma_ult/FOS_norm);
+  g(3)=tau_plate-(Tau_ult/FOS_shear);
+  g(4)=sigma_plate-(sigfcr/FOS_norm);
+ 
+  
+  z = 0;
+  
+function [g, z] = nlcon_B_SS_V2_beam(x,Ef,tf_opt,tc_opt, a, b,nu,rho_f ,rho_c,w_allow_beam,Sigma_ult,FOS_norm,FOS_shear)
+  
+  Af = x(1);  %[mm]
+  h  = x(2);  %[mm]
+  tw = x(3);  %[mm]
+  
+  a=a*1000; %m to mm
+  b=b*1000; %m to mm
+
+  
+  %deflection
+  b_eff =b*(1/(1+10*((b)/(0.58*a))^2)); %[mm] ORIGINAL B
+  AP=(a/1000)*((b/2)/1000); %[m^2]
+  
+  Press_beam=80*(AP)^(-0.3); %[kPa]
+  P_beam=(Press_beam/1000)*(b_eff); %[N/mm]
+  
+  D_beam=(Ef*Af*b_eff*tf_opt*h^2)/(Af+b_eff*tf_opt); %[Nmm^2]
+  G_beam=Ef/(1+2*nu); %[MPa]
+  S_beam=G_beam*tw*h; %[N]
+  
+  A=a/2;
+  w_beam_max=((P_beam*(a^4))/(24*D_beam))*((A/a)^4-2*(A/a)^3+(A/a)^2)+(P_beam/(2*S_beam))*(a*A-(A)^2); 
+ 
+  %stresses
+  T_max=abs((P_beam/2)*(a)); %max @x=0 & x=a
+  M_max=abs(-(P_beam*a^2)/12); %max @x=0 & x=a 
+  y_=(Af*h)/((b_eff*tf_opt)+Af);
+  e=h-y_;
+  
+  I_xx_boom1=Af*e^2;                             % Second moment of inertia upper flange
+  I_xx_boom2=(b_eff*tf_opt)*y_^2;                % Second moment of inertia lower flange
+  
+  I_xx=I_xx_boom1+I_xx_boom2;
+  
+  sigma_beam1=(M_max/I_xx)*e;                        
+  sigma_beam2=(M_max/I_xx)*y_;
+  sigma_beam=max(sigma_beam1,sigma_beam2);
+ 
+  tau_beam= (1.5*T_max)/(h*tw);  
+  
+  %constrains
+  
+  g(1)=w_beam_max-w_allow_beam;
+  g(2)=sigma_beam-(Sigma_ult/FOS_norm);
+  g(3)=tau_beam-((Sigma_ult*0.05)/FOS_shear);
+  
+  z = 0;
   
   
+function m = objFBSS4_plate(x,Ef, Gc, a, b,nu,rho_f ,rho_c,w_allow_plate,Sigma_ult,Tau_ult,sigfcr,FOS_norm,FOS_shear)  
+
+  tf = x(1);  %[mm]
+  tc = x(2);  %[mm]
+
+  m_plate=(((rho_f*(2*tf) + rho_c*tc))*((a*1000)*(b*1000)));%[kg]
+
+  m =m_plate; %[kg]  
+  
+function m = objFBSS4_beam(x,Ef,tf_opt,tc_opt, a, b,n,nu,rho_f ,rho_c,w_allow_beam,Sigma_ult,FOS_norm,FOS_shear)  
+
+  Af = x(1);  %[mm]
+  h  = x(2);  %[mm]
+  tw = x(3);  %[mm]
+
+  m_plate=(((rho_f*(2*tf_opt) + rho_c*tc_opt))*((a*1000)*(b*1000)));%[kg]
+  m_beam=n*(((tw*h+Af)*(a*1000))*rho_f);%[kg]
+
+  m =m_plate+m_beam; %[kg]  
+  
+  
+function [g, z] = nlcon_B_SS4_plate(x,Ef, Gc, a, b,nu,rho_f ,rho_c,w_allow_plate,Sigma_ult,Tau_ult,sigfcr,FOS_norm,FOS_shear)
+  
+  %Plate
+  P_plate=80*((a)*(b))^(-0.3); %[kPa]
+  props=[P_plate,a,b,Ef,Gc,nu];
+  k=plate(x,props);  
+  w_plate_max=k(1);
+  sigma_plate=k(2);
+  tau_plate=k(3);
+  
+  %constrains
+  g(1)=w_plate_max-w_allow_plate;
+  g(2)=sigma_plate-(Sigma_ult/FOS_norm);
+  g(3)=tau_plate-(Tau_ult/FOS_shear);
+  g(4)=sigma_plate-(sigfcr/FOS_norm);
+ 
+  z = 0;  
+
+ function [g, z] = nlcon_B_SS4_beam(x,Ef,tf_opt,tc_opt, a, b,n,nu,rho_f ,rho_c,w_allow_beam,Sigma_ult,FOS_norm,FOS_shear)
+  
+  Af = x(1);  %[mm]
+  h  = x(2);  %[mm]
+  tw = x(3);  %[mm]
+  
+  a=a*1000; %m to mm
+  b=b*1000; %m to mm
+
+  
+  %deflection
+  b_eff =(b*n)*(1/(1+10*((b*n)/(0.58*a))^2)); %[mm] ORIGINAL B
+  AP=(a/1000)*(b/1000); %[m^2] 
+  
+  Press_beam=80*(AP)^(-0.3); %[kPa]
+  P_beam=(Press_beam/1000)*(b_eff); %[N/mm]
+  
+  D_beam=(Ef*Af*b_eff*tf_opt*h^2)/(Af+b_eff*tf_opt); %[Nmm^2]
+  G_beam=Ef/(1+2*nu); %[MPa]
+  S_beam=G_beam*tw*h; %[N]
+  
+  A=a/2;
+  w_beam_max=((P_beam*(a^4))/(24*D_beam))*((A/a)^4-2*(A/a)^3+(A/a)^2)+(P_beam/(2*S_beam))*(a*A-(A)^2); 
+ 
+  %stresses
+  T_max=abs((P_beam/2)*(a)); %max @x=0 & x=a
+  M_max=abs(-(P_beam*a^2)/12); %max @x=0 & x=a 
+  y_=(Af*h)/((b_eff*tf_opt)+Af);
+  e=h-y_;
+  
+  I_xx_boom1=Af*e^2;                             % Second moment of inertia upper flange
+  I_xx_boom2=(b_eff*tf_opt)*y_^2;                % Second moment of inertia lower flange
+  
+  I_xx=I_xx_boom1+I_xx_boom2;
+  
+  sigma_beam1=(M_max/I_xx)*e;                        
+  sigma_beam2=(M_max/I_xx)*y_;
+  sigma_beam=max(sigma_beam1,sigma_beam2);
+ 
+  tau_beam= (1.5*T_max)/(h*tw);  
+  
+  %constrains
+  
+  g(1)=w_beam_max-w_allow_beam;
+  g(2)=sigma_beam-(Sigma_ult/FOS_norm);
+  g(3)=tau_beam-((Sigma_ult*0.05)/FOS_shear);
+  
+  z = 0;
